@@ -27,6 +27,8 @@
 //static struct v4l2_format fmt;
 //struct v4l2_buffer frame_buf;
 #define COURSE 4
+#define FRAME_PATH "/mnt/ramdisk/frames" //Move to header file if successful.
+
 
 struct buffer
 {
@@ -43,10 +45,10 @@ struct buffer
 //static struct timespec time_now, time_start, time_stop;
 
 char ppm_header[]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
-char ppm_dumpname[]="frames/test0000.ppm";
+//char ppm_dumpname[]="/mnt/ramdisk/frames/test0000.ppm";
 
 char pgm_header[]="P5\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
-char pgm_dumpname[]="frames/test0000.pgm";
+//char pgm_dumpname[]="/mnt/ramdisk/frames/test0000.pgm";
 
 // always ignore STARTUP_FRAMES while camera adjusts to lighting, focuses, etc.
 //int read_framecnt=-STARTUP_FRAMES;
@@ -61,9 +63,10 @@ static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 {
     int written, i, total, dumpfd;
    
-    snprintf(&ppm_dumpname[11], 9, "%04d", tag);
-    strncat(&ppm_dumpname[15], ".ppm", 5);
-    dumpfd = open(ppm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
+    char filename[256];
+    snprintf(filename, sizeof(filename), "%s/test%04d.ppm", FRAME_PATH, tag);
+    
+    dumpfd = open(filename, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
 
     snprintf(&ppm_header[4], 11, "%010d", (int)time->tv_sec);
     strncat(&ppm_header[14], " sec ", 5);
@@ -92,10 +95,11 @@ static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
     int written, i, total, dumpfd;
-   
-    snprintf(&pgm_dumpname[11], 9, "%04d", tag);
-    strncat(&pgm_dumpname[15], ".pgm", 5);
-    dumpfd = open(pgm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
+    char filename[256];
+  
+    snprintf(filename, sizeof(filename), "%s/test%04d.pgm", FRAME_PATH, tag);
+ 
+    dumpfd = open(filename, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
 
     snprintf(&pgm_header[4], 11, "%010d", (int)time->tv_sec);
     strncat(&pgm_header[14], " sec ", 5);
@@ -214,5 +218,6 @@ int seq_frame_store(void)
 
     return cnt;
 }
+
 
 
