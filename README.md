@@ -1,1 +1,3 @@
 # machine-vision-synchronome
+
+## Background

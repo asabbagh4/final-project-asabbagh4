@@ -46,8 +46,7 @@
 #include "../headers/process_frame.h"
 #include "../headers/capturelib.h"
 
-/* Course identifier used in syslog messages. */
-#define COURSE 4
+/* COURSE is defined in capturelib.h, which is included via sequencer.h. */
 
 /*  Module-wide variable definitions
 ***************************************************/

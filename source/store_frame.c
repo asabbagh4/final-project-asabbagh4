@@ -45,27 +45,10 @@
 #include "../headers/v4l2_interface.h"
 #include "../headers/process_frame.h"
 
-/* Course identifier used in syslog messages. */
-#define COURSE 4
+/* COURSE and FRAME_PATH are defined in capturelib.h, included via v4l2_interface.h. */
 
-/* Root directory on the ramdisk where frame image files are written.
- * Using a ramdisk avoids SD/eMMC write latency in the RT service thread. */
-#define FRAME_PATH "/mnt/ramdisk/frames"
-
-/*
- * buffer - Tracks a single kernel mmap region.
- * Redeclared here to keep this translation unit self-contained;
- * the authoritative definition lives in v4l2_interface.c.
- *
- * Members:
- *   start  - User-space virtual address returned by mmap().
- *   length - Byte length of the mapped region.
- */
-struct buffer
-{
-    void *start;
-    size_t length;
-};
+/* struct buffer is defined in v4l2_interface.h, which is included above.
+ * The local redefinition was removed to prevent a conflicting-type error. */
 
 /* PPM (color) file header template.
  * snprintf() patches the timestamp fields in-place before each write.

@@ -5,10 +5,16 @@
  *
  * Module Description:
  * Public interface for the V4L2 camera driver abstraction
- * layer. Declares compile-time camera configuration constants,
- * the acquisition ring buffer and frame-save structures, all
- * shared V4L2 kernel-API objects, and every function implemented
- * in v4l2_interface.c.
+ * layer. Declares the acquisition ring buffer and frame-save
+ * structures, all shared V4L2 kernel-API objects, and every
+ * function implemented in v4l2_interface.c.
+ *
+ * All shared compile-time constants (CLEAR, HRES, VRES,
+ * PIXEL_SIZE, HRES_STR, VRES_STR, MAX_HRES, MAX_VRES,
+ * MAX_PIXEL_SIZE, STARTUP_FRAMES, FRAMES_PER_SEC,
+ * DRIVER_MMAP_BUFFERS, COURSE, FRAME_PATH) are defined
+ * in capturelib.h, which this header includes. They must
+ * not be redefined here.
  *
  * Function categories declared here:
  *   Public  - called by sequencer.c and read_frames.c:
@@ -26,60 +32,16 @@
 #ifndef _V4LT_INTERFACE_
 #define _V4LT_INTERFACE_
 
-/*  Defines section
-***************************************************/
-
-/* Zero-initializes any struct or variable by address using memset.
- * Must match the identical macro in capturelib.h; both headers may be
- * included together, so the guard below prevents a redefinition warning. */
-#ifndef CLEAR
-#define CLEAR(x) memset(&(x), 0, sizeof(x))
-#endif
-
-/* Maximum supported horizontal resolution for buffer sizing. */
-#define MAX_HRES (1920)
-
-/* Maximum supported vertical resolution for buffer sizing. */
-#define MAX_VRES (1080)
-
-/* Maximum bytes per pixel across all supported formats (RGB24 = 3). */
-#define MAX_PIXEL_SIZE (3)
-
-/* Active horizontal resolution in pixels negotiated with the sensor. */
-#define HRES (640)
-
-/* Active vertical resolution in pixels negotiated with the sensor. */
-#define VRES (480)
-
-/* Active bytes per pixel for the YUYV packed 4:2:2 format. */
-#define PIXEL_SIZE (2)
-
-/* Active horizontal resolution as a string literal for image file headers. */
-#define HRES_STR "640"
-
-/* Active vertical resolution as a string literal for image file headers. */
-#define VRES_STR "480"
-
-/* Rate at which the sequencer releases the frame-acquisition service (Hz).
- * Also sets the ring buffer depth to 3*FRAMES_PER_SEC slots, providing
- * a three-second history at the current rate. */
-#define FRAMES_PER_SEC (1)
-
-/* Number of frames discarded at pipeline startup while the camera
- * auto-adjusts exposure, white balance, and focus. read_framecnt is
- * initialized to the negative of this value so it reaches 0 exactly
- * on the first post-warmup frame. */
-#define STARTUP_FRAMES (30)
-
-/* Number of V4L2 driver mmap buffers to request. A larger pool reduces
- * the probability of frame drops during service latency spikes. */
-#define DRIVER_MMAP_BUFFERS (6)
+/* capturelib.h is the single source of truth for all shared constants.
+ * Including it here means any translation unit that includes only
+ * v4l2_interface.h still has access to CLEAR, HRES, VRES, etc. */
+#include "capturelib.h"
 
 /*  Type definitions
 ***************************************************/
 
 /* Forward declarations for kernel V4L2 types used in extern variable
- * declarations below; the full definitions come from <linux/videodev2.h>
+ * declarations below. The full definitions come from <linux/videodev2.h>,
  * which is included only in the .c files. */
 struct v4l2_format;
 struct v4l2_buffer;
@@ -87,9 +49,12 @@ struct v4l2_buffer;
 /*
  * buffer - Tracks a single kernel mmap region mapped into user space.
  *
+ * Defined here once. All .c files that previously redefined this struct
+ * locally have had those definitions removed; they rely on this header.
+ *
  * Members:
  *   start  - User-space virtual address returned by mmap().
- *   length - Byte length of the region, from VIDIOC_QUERYBUF.bytesused.
+ *   length - Byte length of the region, from VIDIOC_QUERYBUF.length.
  */
 struct buffer
 {
@@ -103,7 +68,7 @@ struct buffer
  * Members:
  *   frame[]        - Raw pixel data; HRES * VRES * PIXEL_SIZE bytes.
  *   time_stamp     - CLOCK_MONOTONIC value recorded when the frame was dequeued.
- *   identifier_str - Human-readable label (e.g. frame index string).
+ *   identifier_str - Human-readable label (e.g. a frame-index string).
  */
 struct save_frame_t
 {
@@ -116,16 +81,16 @@ struct save_frame_t
  * ring_buffer_t - Lock-free circular buffer connecting the acquisition
  *                 and processing services.
  *
- * The buffer holds 3*FRAMES_PER_SEC slots so that at 1 Hz the most
- * recent three seconds of raw frames are always available without
- * overwriting data that the processing service has not yet consumed.
+ * Holds 3 * FRAMES_PER_SEC slots so that at 1 Hz the most recent three
+ * seconds of raw frames are always available without overwriting data
+ * that the processing service has not yet consumed.
  *
  * Members:
- *   ring_size     - Total allocated slots (3 * FRAMES_PER_SEC).
- *   tail_idx      - Next slot to be written by the acquisition service.
- *   head_idx      - Next slot to be consumed by the processing service.
- *   count         - Number of unread frames currently held in the buffer.
- *   save_frame[]  - Array of frame-storage structs, one per slot.
+ *   ring_size    - Total allocated slots (3 * FRAMES_PER_SEC).
+ *   tail_idx     - Next slot to be written by the acquisition service.
+ *   head_idx     - Next slot to be consumed by the processing service.
+ *   count        - Number of unread frames currently held in the buffer.
+ *   save_frame[] - Array of frame-storage structs, one per slot.
  */
 struct ring_buffer_t
 {
@@ -143,11 +108,11 @@ struct ring_buffer_t
  * and read by all downstream color-conversion and storage functions. */
 extern struct v4l2_format fmt;
 
-/* Reused V4L2 buffer descriptor populated by VIDIOC_DQBUF on every
+/* Reused V4L2 buffer descriptor; populated by VIDIOC_DQBUF on every
  * frame dequeue in read_frame(). */
 extern struct v4l2_buffer frame_buf;
 
-/* Running frame counter; starts at -STARTUP_FRAMES so it reaches 0
+/* Running frame counter. Starts at -STARTUP_FRAMES so it reaches 0
  * on the first post-warmup frame, enabling timestamp and FPS logic. */
 extern int read_framecnt;
 
@@ -226,23 +191,22 @@ int v4l2_frame_acquisition_initialization(char *dev_name);
  *                   1. stop_capturing() - issues VIDIOC_STREAMOFF and
  *                                         records the stop timestamp (fstop)
  *                   2. Prints total capture time and achieved frame rate
- *                      to stdout
  *                   3. uninit_device()  - unmaps all mmap regions and
  *                                         frees the buffers[] array
  *                   4. close_device()   - closes camera_device_fd
- * Notes         : Call from main() only after all three service threads
- *                 have been joined. The read_framecnt + 1 adjustment in
- *                 the FPS calculation corrects for the -STARTUP_FRAMES
+ * Notes         : Call from main() only after all service threads have
+ *                 been joined. The read_framecnt + 1 adjustment in the
+ *                 FPS calculation corrects for the -STARTUP_FRAMES
  *                 initialization value.
  **************************************************/
 int v4l2_frame_acquisition_shutdown(void);
 
 /*  Private (static) function prototypes
  *
- * These functions are file-scoped in v4l2_interface.c. They are
- * declared here so that the full call graph is visible at a glance
- * and to allow future unit-test harnesses to reference them without
- * modifying the source file. Do not call them from outside this module.
+ * These functions are file-scoped in v4l2_interface.c. They are declared
+ * here so the full call graph is visible at a glance and to allow future
+ * unit-test harnesses to reference them without modifying the source file.
+ * Do not call them from outside this module.
  ***************************************************/
 
 /**************************************************
@@ -251,9 +215,9 @@ int v4l2_frame_acquisition_shutdown(void);
  *    dev_name   : path to the V4L2 character device node
  * Created by    : course 4 team
  * Date created  : 2024
- * Description   : Verifies that dev_name refers to a character device
- *                 via stat(2), then opens it in read-write non-blocking
- *                 mode and stores the result in camera_device_fd.
+ * Description   : Verifies that dev_name refers to a character device via
+ *                 stat(2), then opens it in read-write non-blocking mode
+ *                 and stores the result in camera_device_fd.
  * Notes         : O_NONBLOCK is required so that seq_frame_read() can
  *                 use select(2) for timeout-guarded dequeue rather than
  *                 blocking indefinitely inside read_frame().
@@ -284,11 +248,10 @@ static void close_device(void);
  *                 YUYV progressive format at HRES x VRES via VIDIOC_S_FMT;
  *                 otherwise preserves the existing driver format.
  *                 Applies paranoia corrections to bytesperline and
- *                 sizeimage to guard against buggy drivers, then calls
- *                 init_mmap() to allocate capture buffers.
+ *                 sizeimage, then calls init_mmap().
  * Notes         : VIDIOC_S_FMT may silently adjust width or height to
- *                 the nearest value the hardware supports. Verify fmt
- *                 fields after the call if exact resolution is critical.
+ *                 the nearest hardware-supported value. Verify fmt fields
+ *                 after the call if exact resolution is critical.
  **************************************************/
 static void init_device(char *dev_name);
 
@@ -299,11 +262,11 @@ static void init_device(char *dev_name);
  * Created by    : course 4 team
  * Date created  : 2024
  * Description   : Requests DRIVER_MMAP_BUFFERS kernel buffers via
- *                 VIDIOC_REQBUFS, then iterates over each buffer,
- *                 querying its size with VIDIOC_QUERYBUF and mapping it
- *                 into user space with mmap(). Stores each mapped region
- *                 in the buffers[] array. Also zeroes and sizes the
- *                 ring_buffer struct to 3*FRAMES_PER_SEC slots.
+ *                 VIDIOC_REQBUFS, queries each buffer's size with
+ *                 VIDIOC_QUERYBUF, and maps it into user space with
+ *                 mmap(). Stores each mapped region in buffers[].
+ *                 Also zeroes and sizes ring_buffer to
+ *                 3 * FRAMES_PER_SEC slots.
  * Notes         : Exits if the driver allocates fewer than 2 buffers.
  *                 MAP_FAILED from mmap() is treated as a fatal error.
  *                 ring_buffer must be initialized here, before the first
@@ -319,11 +282,11 @@ static void init_mmap(char *dev_name);
  * Description   : Enqueues every allocated mmap buffer into the driver's
  *                 incoming queue via VIDIOC_QBUF, then issues
  *                 VIDIOC_STREAMON to start the DMA transfer engine.
- *                 After this call the sensor begins filling buffers
- *                 in round-robin order as frames arrive.
+ *                 After this call the sensor begins filling buffers in
+ *                 round-robin order as frames arrive.
  * Notes         : All n_buffers buffers must be enqueued before STREAMON;
- *                 leaving any buffer outside the queue reduces the
- *                 available pipeline depth and increases drop risk.
+ *                 leaving any buffer outside the queue reduces pipeline
+ *                 depth and increases frame-drop risk.
  **************************************************/
 static void start_capturing(void);
 
@@ -335,11 +298,10 @@ static void start_capturing(void);
  * Description   : Samples the CLOCK_MONOTONIC stop timestamp into
  *                 time_stop and fstop immediately before issuing
  *                 VIDIOC_STREAMOFF to halt the DMA transfer engine.
- *                 After this call no further frames are delivered by
- *                 the driver.
- * Notes         : The timestamp is recorded before STREAMOFF rather
- *                 than after to minimize latency error in the final
- *                 FPS calculation printed by v4l2_frame_acquisition_shutdown().
+ *                 After this call no further frames are delivered.
+ * Notes         : The timestamp is recorded before STREAMOFF rather than
+ *                 after to minimize latency error in the final FPS
+ *                 calculation printed by v4l2_frame_acquisition_shutdown().
  **************************************************/
 static void stop_capturing(void);
 
@@ -348,11 +310,11 @@ static void stop_capturing(void);
  *    returns    : void; calls errno_exit() if munmap() fails
  * Created by    : course 4 team
  * Date created  : 2024
- * Description   : Iterates over buffers[0..n_buffers-1] and unmaps
- *                 each kernel region with munmap(), then frees the
- *                 buffers[] tracking array. Must be called only after
- *                 stop_capturing() has issued VIDIOC_STREAMOFF, so the
- *                 driver is no longer writing into the mapped regions.
+ * Description   : Iterates over buffers[0..n_buffers-1], unmaps each
+ *                 kernel region with munmap(), then frees the buffers[]
+ *                 tracking array. Must be called only after stop_capturing()
+ *                 has issued VIDIOC_STREAMOFF, so the driver is no longer
+ *                 writing into the mapped regions.
  **************************************************/
 static void uninit_device(void);
 
