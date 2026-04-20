@@ -42,3 +42,5 @@ clear_root_password() {
 }
 
 ROOTFS_POSTPROCESS_COMMAND:append = " generate_ssh_host_keys; configure_network; configure_sshd; clear_root_password;"
+
+IMAGE_INSTALL:append = " synchronome"

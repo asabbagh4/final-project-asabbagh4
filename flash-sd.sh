@@ -4,15 +4,23 @@
 # Usage: ./flash-sd.sh [/dev/sdX]
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ "${EUID}" -ne 0 ]]; then
+    exec sudo "$SCRIPT_DIR/$(basename "$0")" "$@"
+fi
+
+cd "${SCRIPT_DIR}"
+
 if [[ "$(uname)" != "Linux" ]]; then
     echo "ERROR: This script is for Linux only. Use flash-sd-mac.sh on macOS."
     exit 1
 fi
 
 IMAGE_DIR="./build/tmp/deploy/images/raspberrypi4-64"
-IMAGE=$(ls "${IMAGE_DIR}"/core-image-base-raspberrypi4-64.rpi-sdimg 2>/dev/null | head -1)
+IMAGE=$(readlink -f "${IMAGE_DIR}/core-image-base-raspberrypi4-64.rpi-sdimg" 2>/dev/null)
 
-if [ -z "${IMAGE}" ]; then
+if [ -z "${IMAGE}" ] || [ ! -f "${IMAGE}" ]; then
     echo "ERROR: No .rpi-sdimg found in ${IMAGE_DIR}/"
     echo "Run ./build.sh first."
     exit 1
@@ -76,18 +84,22 @@ echo ""
 echo "Unmounting any mounted partitions on ${DISK}..."
 for part in "${DISK}"*; do
     if mountpoint -q "$(findmnt -n -o TARGET "${part}" 2>/dev/null)" 2>/dev/null; then
-        sudo umount "${part}" 2>/dev/null || true
+        umount "${part}" 2>/dev/null || true
     fi
 done
 # Also try umount by device directly
-sudo umount "${DISK}"* 2>/dev/null || true
+umount "${DISK}"* 2>/dev/null || true
 
 echo "Flashing image to ${DISK}..."
-sudo dd if="${IMAGE}" of="${DISK}" bs=4M status=progress conv=fsync
+dd if="${IMAGE}" of="${DISK}" bs=4M status=progress conv=fsync
 
 echo ""
 echo "Syncing..."
 sync
+
+# Re-read partition table and wait for udev to re-enumerate the device
+blockdev --rereadpt "${DISK}" 2>/dev/null || true
+udevadm settle --timeout=10
 
 echo ""
 echo "=== Done! ==="
@@ -107,16 +119,16 @@ else
     ROOTFS_PART="${DISK}2"
 fi
 MNT_DIR="/tmp/sdroot-verify-$$"
-sudo mkdir -p "$MNT_DIR"
-if sudo mount -o ro "$ROOTFS_PART" "$MNT_DIR" 2>/dev/null; then
+mkdir -p "$MNT_DIR"
+if mount -o ro "$ROOTFS_PART" "$MNT_DIR" 2>/dev/null; then
     if [ -d "$MNT_DIR/etc/ssh" ]; then
         echo "Rootfs mount OK. SSH config found."
         ls -l "$MNT_DIR/etc/ssh"
     else
         echo "Rootfs mount OK, but /etc/ssh not found!"
     fi
-    sudo umount "$MNT_DIR"
+    umount "$MNT_DIR"
 else
     echo "WARNING: Could not mount rootfs partition ($ROOTFS_PART). The image may be corrupted or the card is faulty."
 fi
-sudo rmdir "$MNT_DIR"
+rmdir "$MNT_DIR"
