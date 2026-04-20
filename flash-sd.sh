@@ -93,3 +93,30 @@ echo ""
 echo "=== Done! ==="
 echo "Insert the SD card into your Raspberry Pi 4 and power on."
 echo "SSH in with: ssh root@<pi-ip>"
+
+# Verification step: check partitions and try mounting rootfs
+echo ""
+echo "Verifying SD card..."
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL,MODEL "${DISK}"
+
+# Find rootfs partition (second partition, usually)
+# mmcblk devices use pN suffix (e.g. mmcblk1p2), others use plain N (e.g. sdb2)
+if [[ "${BASENAME}" == mmcblk* ]]; then
+    ROOTFS_PART="${DISK}p2"
+else
+    ROOTFS_PART="${DISK}2"
+fi
+MNT_DIR="/tmp/sdroot-verify-$$"
+sudo mkdir -p "$MNT_DIR"
+if sudo mount -o ro "$ROOTFS_PART" "$MNT_DIR" 2>/dev/null; then
+    if [ -d "$MNT_DIR/etc/ssh" ]; then
+        echo "Rootfs mount OK. SSH config found."
+        ls -l "$MNT_DIR/etc/ssh"
+    else
+        echo "Rootfs mount OK, but /etc/ssh not found!"
+    fi
+    sudo umount "$MNT_DIR"
+else
+    echo "WARNING: Could not mount rootfs partition ($ROOTFS_PART). The image may be corrupted or the card is faulty."
+fi
+sudo rmdir "$MNT_DIR"

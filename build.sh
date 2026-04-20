@@ -6,9 +6,11 @@
 
 git submodule init
 git submodule sync
-git submodule update
+git submodule update --recursive
 
 source poky/oe-init-build-env
+
+set -e
 
 CONFLINE="MACHINE = \"raspberrypi4-64\""
 
@@ -17,8 +19,6 @@ IMAGE="IMAGE_FSTYPES = \"rpi-sdimg\""
 MEMORY="GPU_MEM = \"16\""
 
 LICENCE="LICENSE_FLAGS_ACCEPTED = \"commercial\""
-
-KERNEL_V4L2="IMAGE_INSTALL:append = \" v4l-utils\""
 
 KERNEL_MODULES="KERNEL_MODULE_AUTOLOAD += \"uvcvideo videodev\""
 
@@ -44,7 +44,6 @@ DEV_TOOLS="IMAGE_FEATURES:append = \" dev-pkgs tools-sdk\""
 
 ROOTFS_SIZE="IMAGE_ROOTFS_EXTRA_SPACE = \"2097152\""
 
-
 NUM_CORES=$(nproc)
 BB_THREADS="BB_NUMBER_THREADS = \"${NUM_CORES}\""
 PARALLEL="PARALLEL_MAKE = \"-j ${NUM_CORES}\""
@@ -69,7 +68,6 @@ append_to_local_conf "${LICENCE}" "Commercial license acceptance"
 append_to_local_conf "${KERNEL_MODULES}" "USB camera kernel modules"
 append_to_local_conf "${SERIAL_CONSOLE}" "Serial console (UART)"
 
-append_to_local_conf "${KERNEL_V4L2}" "V4L2 utilities"
 append_to_local_conf "${PACKAGES_DEV}" "Development tools"
 append_to_local_conf "${PACKAGES_VIDEO}" "Video support"
 append_to_local_conf "${PACKAGES_UTILS}" "System utilities"
@@ -99,8 +97,12 @@ if [ $layer_oe -ne 0 ]; then
     bitbake-layers add-layer ../meta-openembedded/meta-networking
 fi
 
-bitbake-layers show-layers
+bitbake-layers show-layers | grep "meta-aesd" > /dev/null
+layer_aesd=$?
+if [ $layer_aesd -ne 0 ]; then
+    bitbake-layers add-layer ../meta-aesd
+fi
 
-set -e
+bitbake-layers show-layers
 
 bitbake core-image-base
