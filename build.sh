@@ -50,11 +50,8 @@ PARALLEL="PARALLEL_MAKE = \"-j 4\""
 append_to_local_conf() {
     local config_line="$1"
     local description="$2"
-    
-    cat conf/local.conf | grep -F "${config_line}" > /dev/null
-    local info=$?
-    
-    if [ $info -ne 0 ]; then
+
+    if ! grep -qF "${config_line}" conf/local.conf; then
         echo "${config_line}" >> conf/local.conf
     fi
 }
@@ -82,23 +79,22 @@ append_to_local_conf "${ROOTFS_SIZE}" "Root filesystem size"
 append_to_local_conf "${BB_THREADS}" "BitBake threads"
 append_to_local_conf "${PARALLEL}" "Parallel make jobs"
 
-bitbake-layers show-layers | grep "meta-raspberrypi" > /dev/null
-layer_info=$?
-if [ $layer_info -ne 0 ]; then
+if [ -n "${YOCTO_CACHE_DIR:-}" ]; then
+    append_to_local_conf "SSTATE_DIR = \"${YOCTO_CACHE_DIR}/sstate\"" "Shared sstate cache"
+    append_to_local_conf "DL_DIR = \"${YOCTO_CACHE_DIR}/downloads\"" "Shared downloads cache"
+fi
+
+if ! bitbake-layers show-layers | grep -q "meta-raspberrypi"; then
     bitbake-layers add-layer ../meta-raspberrypi
 fi
 
-bitbake-layers show-layers | grep "meta-oe" > /dev/null
-layer_oe=$?
-if [ $layer_oe -ne 0 ]; then
+if ! bitbake-layers show-layers | grep -q "meta-oe"; then
     bitbake-layers add-layer ../meta-openembedded/meta-oe
     bitbake-layers add-layer ../meta-openembedded/meta-python
     bitbake-layers add-layer ../meta-openembedded/meta-networking
 fi
 
-bitbake-layers show-layers | grep "meta-aesd" > /dev/null
-layer_aesd=$?
-if [ $layer_aesd -ne 0 ]; then
+if ! bitbake-layers show-layers | grep -q "meta-aesd"; then
     bitbake-layers add-layer ../meta-aesd
 fi
 

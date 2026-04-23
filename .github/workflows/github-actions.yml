@@ -68,6 +68,7 @@ jobs:
                  echo "=== Linux detected — using bind mount build ==="
                  docker run --rm \
                    -v ${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE} \
+                   -v /home/abdul/yocto-cache:/yocto-cache \
                    --workdir=${GITHUB_WORKSPACE} \
                    ubuntu:22.04 bash -c "
                      set -e
@@ -84,7 +85,7 @@ jobs:
                      export LC_ALL=en_US.UTF-8
                      useradd -m builder 2>/dev/null || true
                      chown -R builder:builder ${GITHUB_WORKSPACE}
-                     su - builder -c 'cd ${GITHUB_WORKSPACE} && ./build.sh'
+                     su - builder -c 'cd ${GITHUB_WORKSPACE} && YOCTO_CACHE_DIR=/yocto-cache ./build.sh'
                    "
                fi
           - name: Run full test
