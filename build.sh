@@ -44,9 +44,8 @@ DEV_TOOLS="IMAGE_FEATURES:append = \" dev-pkgs tools-sdk\""
 
 ROOTFS_SIZE="IMAGE_ROOTFS_EXTRA_SPACE = \"2097152\""
 
-NUM_CORES=$(nproc)
-BB_THREADS="BB_NUMBER_THREADS = \"${NUM_CORES}\""
-PARALLEL="PARALLEL_MAKE = \"-j ${NUM_CORES}\""
+BB_THREADS="BB_NUMBER_THREADS = \"1\""
+PARALLEL="PARALLEL_MAKE = \"-j 4\""
 
 append_to_local_conf() {
     local config_line="$1"
