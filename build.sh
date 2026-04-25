@@ -82,6 +82,7 @@ append_to_local_conf "${PARALLEL}" "Parallel make jobs"
 if [ -n "${YOCTO_CACHE_DIR:-}" ]; then
     append_to_local_conf "SSTATE_DIR = \"${YOCTO_CACHE_DIR}/sstate\"" "Shared sstate cache"
     append_to_local_conf "DL_DIR = \"${YOCTO_CACHE_DIR}/downloads\"" "Shared downloads cache"
+    append_to_local_conf "BB_GENERATE_MIRROR_TARBALLS = \"1\"" "Resilient git mirror tarballs"
 fi
 
 if ! bitbake-layers show-layers | grep -q "meta-raspberrypi"; then
