@@ -13,123 +13,27 @@ jobs:
             with:
               clean: false
               submodules: 'recursive'
-          - name: Detect platform and build
+          - name: Build and validate image
             timeout-minutes: 600
             run: |
-               HOST_OS=$(uname -s)
-               if [ "$HOST_OS" = "Darwin" ]; then
-                 echo "=== macOS detected — using Docker volume build ==="
-                 docker volume create yocto-ci-build || true
-
-                 # Sync source into volume
-                 docker run --rm \
-                   -v ${GITHUB_WORKSPACE}:/src:ro \
-                   -v yocto-ci-build:/dest \
-                   ubuntu:22.04 bash -c "
-                     apt-get update -qq && apt-get install -y -qq rsync > /dev/null 2>&1
-                     rsync -a --delete \
-                       --exclude='build/tmp' \
-                       --exclude='build/sstate-cache' \
-                       --exclude='build/downloads' \
-                       --exclude='build/cache' \
-                       /src/ /dest/project/
-                   "
-
-                 # Build inside volume
-                 docker run --rm \
-                   -v yocto-ci-build:/home/builder \
-                   ubuntu:22.04 bash -c "
-                     set -e
-                     export DEBIAN_FRONTEND=noninteractive
-                     ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-                     apt-get update -qq
-                     apt-get install -y -qq \
-                       gawk wget git diffstat unzip texinfo gcc build-essential \
-                       chrpath socat cpio python3 python3-pip python3-pexpect \
-                       xz-utils debianutils iputils-ping python3-git python3-jinja2 \
-                       python3-subunit zstd liblz4-tool file locales libacl1-dev lz4 \
-                       > /dev/null 2>&1
-                     locale-gen en_US.UTF-8 > /dev/null 2>&1
-                     export LC_ALL=en_US.UTF-8
-                     useradd -m -d /home/builder builder 2>/dev/null || true
-                     chown -R builder:builder /home/builder/project
-                     su - builder -c 'cd /home/builder/project && ./build.sh'
-                   "
-
-                 # Copy artifacts back
-                 mkdir -p ${GITHUB_WORKSPACE}/deploy-images
-                 docker run --rm \
-                   -v yocto-ci-build:/src:ro \
-                   -v ${GITHUB_WORKSPACE}/deploy-images:/out \
-                   ubuntu:22.04 bash -c "
-                     cp /src/project/build/tmp/deploy/images/raspberrypi4-64/*.rpi-sdimg /out/ 2>/dev/null || true
-                   "
-               else
-                 echo "=== Linux detected — using bind mount build ==="
-                 docker run --rm \
-                   -v ${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE} \
-                   -v /home/abdul/yocto-cache:/yocto-cache \
-                   --workdir=${GITHUB_WORKSPACE} \
-                   ubuntu:22.04 bash -c "
-                     set -e
-                     export DEBIAN_FRONTEND=noninteractive
-                     ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-                     apt-get update -qq
-                     apt-get install -y -qq \
-                       gawk wget git diffstat unzip texinfo gcc build-essential \
-                       chrpath socat cpio python3 python3-pip python3-pexpect \
-                       xz-utils debianutils iputils-ping python3-git python3-jinja2 \
-                       python3-subunit zstd liblz4-tool file locales libacl1-dev lz4 \
-                       > /dev/null 2>&1
-                     locale-gen en_US.UTF-8 > /dev/null 2>&1
-                     export LC_ALL=en_US.UTF-8
-                     useradd -m builder 2>/dev/null || true
-                     chown -R builder:builder ${GITHUB_WORKSPACE}
-                     su - builder -c 'cd ${GITHUB_WORKSPACE} && YOCTO_CACHE_DIR=/yocto-cache ./build.sh'
-                   "
-               fi
-          - name: Run full test
-            timeout-minutes: 15
-            run: |
-               HOST_OS=$(uname -s)
-               if [ "$HOST_OS" = "Darwin" ]; then
-                 docker run --rm \
-                   -v yocto-ci-build:/home/builder \
-                   ubuntu:22.04 bash -c "
-                     set -e
-                     export DEBIAN_FRONTEND=noninteractive
-                     apt-get update -qq
-                     apt-get install -y -qq \
-                       gawk wget git diffstat unzip texinfo gcc build-essential \
-                       chrpath socat cpio python3 python3-pip python3-pexpect \
-                       xz-utils debianutils iputils-ping python3-git python3-jinja2 \
-                       python3-subunit zstd liblz4-tool file locales libacl1-dev lz4 \
-                       > /dev/null 2>&1
-                     locale-gen en_US.UTF-8 > /dev/null 2>&1
-                     export LC_ALL=en_US.UTF-8
-                     useradd -m -d /home/builder builder 2>/dev/null || true
-                     chown -R builder:builder /home/builder/project
-                     su - builder -c 'cd /home/builder/project && ./full-test.sh'
-                   "
-               else
-                 docker run --rm \
-                   -v ${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE} \
-                   -v /home/abdul/yocto-cache:/yocto-cache \
-                   --workdir=${GITHUB_WORKSPACE} \
-                   ubuntu:22.04 bash -c "
-                     set -e
-                     export DEBIAN_FRONTEND=noninteractive
-                     apt-get update -qq
-                     apt-get install -y -qq \
-                       gawk wget git diffstat unzip texinfo gcc build-essential \
-                       chrpath socat cpio python3 python3-pip python3-pexpect \
-                       xz-utils debianutils iputils-ping python3-git python3-jinja2 \
-                       python3-subunit zstd liblz4-tool file locales libacl1-dev lz4 \
-                       > /dev/null 2>&1
-                     locale-gen en_US.UTF-8 > /dev/null 2>&1
-                     export LC_ALL=en_US.UTF-8
-                     useradd -m builder 2>/dev/null || true
-                     chown -R builder:builder ${GITHUB_WORKSPACE}
-                     su - builder -c 'cd ${GITHUB_WORKSPACE} && YOCTO_CACHE_DIR=/yocto-cache ./full-test.sh'
-                   "
-               fi
+               docker run --rm \
+                 -v ${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE} \
+                 -v /home/abdul/yocto-cache:/yocto-cache \
+                 --workdir=${GITHUB_WORKSPACE} \
+                 ubuntu:22.04 bash -c "
+                   set -e
+                   export DEBIAN_FRONTEND=noninteractive
+                   ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+                   apt-get update -qq
+                   apt-get install -y -qq \
+                     gawk wget git diffstat unzip texinfo gcc build-essential \
+                     chrpath socat cpio python3 python3-pip python3-pexpect \
+                     xz-utils debianutils iputils-ping python3-git python3-jinja2 \
+                     python3-subunit zstd liblz4-tool file locales libacl1-dev lz4 \
+                     > /dev/null 2>&1
+                   locale-gen en_US.UTF-8 > /dev/null 2>&1
+                   export LC_ALL=en_US.UTF-8
+                   useradd -m builder 2>/dev/null || true
+                   chown -R builder:builder ${GITHUB_WORKSPACE}
+                   su - builder -c 'cd ${GITHUB_WORKSPACE} && YOCTO_CACHE_DIR=/yocto-cache ./full-test.sh'
+                 "
